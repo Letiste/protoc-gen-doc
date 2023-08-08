@@ -436,6 +436,11 @@ func TestExcludedComments(t *testing.T) {
 	require.Equal(t, "the id of this message.", findField("id", message).Description)
 }
 
+func TestHasCustomAnnotations(t *testing.T) {
+	service := findService("VehicleService", vehicleFile)
+	require.Equal(t, "my-team", service.Annotation("team"))
+}
+
 func findService(name string, f *File) *Service {
 	for _, s := range f.Services {
 		if s.Name == name {

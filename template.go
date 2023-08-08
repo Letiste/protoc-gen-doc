@@ -3,6 +3,7 @@ package gendoc
 import (
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -318,11 +319,15 @@ type Service struct {
 	Description string           `json:"description"`
 	Methods     []*ServiceMethod `json:"methods"`
 
-	Options map[string]interface{} `json:"options,omitempty"`
+	Options     map[string]interface{} `json:"options,omitempty"`
+	Annotations map[string]interface{} `json:"annotations,omitempty"`
 }
 
 // Option returns the named option.
 func (s Service) Option(name string) interface{} { return s.Options[name] }
+
+// Annotation returns the named option.
+func (s Service) Annotation(name string) interface{} { return s.Annotations[name] }
 
 // MethodOptions returns all options that are set on the methods in this service.
 func (s Service) MethodOptions() []string {
@@ -371,7 +376,9 @@ type ServiceMethod struct {
 	ResponseFullType  string `json:"responseFullType"`
 	ResponseStreaming bool   `json:"responseStreaming"`
 
-	Options map[string]interface{} `json:"options,omitempty"`
+	Options        map[string]interface{} `json:"options,omitempty"`
+	Annotations    map[string]interface{} `json:"annotations,omitempty"`
+	HasAnnotations bool                   `json:"hasAnnotations"`
 }
 
 // Option returns the named option.
@@ -509,6 +516,7 @@ func parseService(ps *protokit.ServiceDescriptor) *Service {
 		FullName:    ps.GetFullName(),
 		Description: description(ps.GetComments().String()),
 		Options:     mergeOptions(extractOptions(ps.GetOptions()), extensions.Transform(ps.OptionExtensions)),
+		Annotations: annotations(description(ps.GetComments().String())),
 	}
 
 	for _, sm := range ps.Methods {
@@ -519,7 +527,7 @@ func parseService(ps *protokit.ServiceDescriptor) *Service {
 }
 
 func parseServiceMethod(pm *protokit.MethodDescriptor) *ServiceMethod {
-	return &ServiceMethod{
+	serviceMethod := &ServiceMethod{
 		Name:              pm.GetName(),
 		Description:       description(pm.GetComments().String()),
 		RequestType:       baseName(pm.GetInputType()),
@@ -531,7 +539,10 @@ func parseServiceMethod(pm *protokit.MethodDescriptor) *ServiceMethod {
 		ResponseFullType:  strings.TrimPrefix(pm.GetOutputType(), "."),
 		ResponseStreaming: pm.GetServerStreaming(),
 		Options:           mergeOptions(extractOptions(pm.GetOptions()), extensions.Transform(pm.OptionExtensions)),
+		Annotations:       annotations(description(pm.GetComments().String())),
 	}
+	serviceMethod.HasAnnotations = len(serviceMethod.Annotations) > 0
+	return serviceMethod
 }
 
 func baseName(name string) string {
@@ -572,6 +583,16 @@ func description(comment string) string {
 	}
 
 	return val
+}
+
+func annotations(description string) map[string]interface{} {
+	annotations := make(map[string]interface{})
+	reg := regexp.MustCompile("@\\[([^:].+):([^\\]]+.)\\]")
+	matches := reg.FindAllStringSubmatch(description, -1)
+	for _, match := range matches {
+		annotations[match[1]] = match[2]
+	}
+	return annotations
 }
 
 type orderedEnums []*Enum
